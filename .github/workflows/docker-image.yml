@@ -28,8 +28,10 @@ jobs:
 
       - name: Publish Duplicati server for linux-x64
         run: |
+          set -euo pipefail
           mkdir -p docker-context/amd64
-          dotnet publish Duplicati/Server/Duplicati.Server.csproj \
+
+          dotnet publish Executables/Duplicati.Server/Duplicati.Server.csproj \
             --configuration Release \
             --runtime linux-x64 \
             --self-contained true \
@@ -37,10 +39,25 @@ jobs:
 
       - name: Prepare Docker context
         run: |
-          set -e
-          test -f docker-context/amd64/Duplicati.Server
-          mv docker-context/amd64/Duplicati.Server docker-context/amd64/duplicati-server
+          set -euo pipefail
+
+          echo "Published files:"
+          find docker-context/amd64 -maxdepth 1 -type f -printf '%f\n'
+
+          executable="$(find docker-context/amd64 -maxdepth 1 -type f -executable \
+            ! -name '*.dll' \
+            ! -name '*.json' \
+            ! -name '*.pdb' \
+            | head -n 1)"
+
+          if [ -z "$executable" ]; then
+            echo "No executable was found in docker-context/amd64"
+            exit 1
+          fi
+
+          mv "$executable" docker-context/amd64/duplicati-server
           chmod +x docker-context/amd64/duplicati-server
+
           cp ReleaseBuilder/Resources/Docker/run-as-user.sh docker-context/run-as-user.sh
           cp ReleaseBuilder/Resources/Docker/Dockerfile docker-context/Dockerfile
 
