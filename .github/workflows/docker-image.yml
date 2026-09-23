@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   docker:
+    name: Build linux/amd64 Docker image
     runs-on: ubuntu-latest
 
     steps:
@@ -27,24 +28,32 @@ jobs:
           dotnet-version: 10.x
 
       - name: Publish Duplicati server for linux-x64
+        shell: bash
         run: |
           set -euo pipefail
+
+          rm -rf docker-context
           mkdir -p docker-context/amd64
 
-          dotnet publish Executables/Duplicati.Server/Duplicati.Server.csproj \
+          dotnet publish \
+            Executables/Duplicati.Server/Duplicati.Server.csproj \
             --configuration Release \
             --runtime linux-x64 \
             --self-contained true \
             --output docker-context/amd64
 
       - name: Prepare Docker context
+        shell: bash
         run: |
           set -euo pipefail
 
           echo "Published files:"
           find docker-context/amd64 -maxdepth 1 -type f -printf '%f\n'
 
-          executable="$(find docker-context/amd64 -maxdepth 1 -type f -executable \
+          executable="$(find docker-context/amd64 \
+            -maxdepth 1 \
+            -type f \
+            -executable \
             ! -name '*.dll' \
             ! -name '*.json' \
             ! -name '*.pdb' \
@@ -55,11 +64,24 @@ jobs:
             exit 1
           fi
 
+          echo "Using executable: $executable"
+
           mv "$executable" docker-context/amd64/duplicati-server
           chmod +x docker-context/amd64/duplicati-server
 
-          cp ReleaseBuilder/Resources/Docker/run-as-user.sh docker-context/run-as-user.sh
-          cp ReleaseBuilder/Resources/Docker/Dockerfile docker-context/Dockerfile
+          cp \
+            ReleaseBuilder/Resources/Docker/run-as-user.sh \
+            docker-context/run-as-user.sh
+
+          cp \
+            ReleaseBuilder/Resources/Docker/Dockerfile \
+            docker-context/Dockerfile
+
+          echo "Docker context:"
+          find docker-context -maxdepth 2 -type f -printf '%p\n'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
